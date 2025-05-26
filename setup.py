@@ -29,6 +29,5 @@ setup(
         "clip",
         "image-reward",
         "hpsv2",
-        "gdown",
     ],
 )
