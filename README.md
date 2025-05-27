@@ -1,12 +1,12 @@
 # Refining Few-Step Text-to-Multiview Diffusion via Reinforcement Learning
 
 <div align="left">
-  <a href="https://arxiv.org/abs/" target="_blank"><img src="https://img.shields.io/badge/Paper_PDF-arXiv-red"></a>
+  <a href="https://arxiv.org/abs/2505.20107" target="_blank"><img src="https://img.shields.io/badge/Paper_PDF-arXiv-red"></a>
   <a href="https://drive.google.com/file/d/1KTNNFPBrOAvwbz_5w0ufFMoooigmt3vL/view?usp=drive_link"  target="_blank"><img src="https://img.shields.io/badge/Model-Google_Drive-blue"></a>
   <a href="#" target="_blank"><img src="https://img.shields.io/badge/Online_Demo-TODO-yellow"></a>
 </div>
 
-This repository contains the official implementation of **MVC-ZigAL**, as presented in [*Refining Few-Step Text-to-Multiview Diffusion via Reinforcement Learning*]().
+This repository contains the official implementation of **MVC-ZigAL**, as presented in [*Refining Few-Step Text-to-Multiview Diffusion via Reinforcement Learning*](https://arxiv.org/abs/2505.20107).
 
 ## 🚀 Introduction
 
@@ -77,7 +77,7 @@ If you find this work helpful in your research, please consider citing:
 @article{zhang2025refining,
   title={Refining Few-Step Text-to-Multiview Diffusion via Reinforcement Learning},
   author={Ziyi Zhang and Li Shen and Deheng Ye and Yong Luo and Huangxuan Zhao and Lefei Zhang},
-  journal={arXiv preprint arXiv:},
+  journal={arXiv preprint arXiv:2505.20107},
   year={2025}
 }
 ```
