@@ -86,3 +86,4 @@ If you find this work helpful in your research, please consider citing:
 
 - This repository builds upon [MV-Adapter](https://github.com/huanngzh/MV-Adapter) and [RLCM](https://github.com/Owen-Oertell/rlcm). We thank the respective authors for their valuable contributions.
 - We also make use of code and pretrained models from [MATE-3D](https://github.com/zhangyujie-1998/MATE-3D), [PickScore](https://github.com/yuvalkirstain/PickScore), [HPSv2](https://github.com/tgxs002/HPSv2), and [ImageReward](https://github.com/THUDM/ImageReward). We thank the respective developers for making their resources publicly available.
+- Special thanks to [Zigzag-Diffusion-Sampling](https://github.com/xie-lab-ml/Zigzag-Diffusion-Sampling) for releasing their inference code, which informed our ZMV-Sampling implementation.
