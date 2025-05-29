@@ -326,11 +326,14 @@ def mvczigal_trainer(accelerator, cfg, pipeline, unet, reward_fn, mv_reward_fn, 
                 samples_batched2 = [dict(zip(samples_batched2, x)) for x in zip(*samples_batched2.values())]
 
                 # get Guidance Scale Embedding
-                guidance_scale_tensor = torch.tensor(cfg.training.guidance_scale - 1).repeat(
-                    cfg.training.train_batch_size_per_gpu * cfg.training.num_views)
-                timestep_cond = pipeline.get_guidance_scale_embedding(
-                    guidance_scale_tensor, embedding_dim=pipeline.unet.config.time_cond_proj_dim
-                ).to(device=accelerator.device, dtype=samples1["states"].dtype)
+                if pipeline.unet.config.time_cond_proj_dim is not None:
+                    guidance_scale_tensor = torch.tensor(cfg.training.guidance_scale - 1).repeat(
+                        cfg.training.train_batch_size_per_gpu * cfg.training.num_views)
+                    timestep_cond = pipeline.get_guidance_scale_embedding(
+                        guidance_scale_tensor, embedding_dim=pipeline.unet.config.time_cond_proj_dim
+                    ).to(device=accelerator.device, dtype=samples1["states"].dtype)
+                else:
+                    timestep_cond = None
 
                 # begin training
                 unet.train()
@@ -352,8 +355,11 @@ def mvczigal_trainer(accelerator, cfg, pipeline, unet, reward_fn, mv_reward_fn, 
                     ):
                         with accelerator.accumulate(unet):
                             with autocast():
+                                latents = torch.cat(
+                                    [sample1["states"][:, j]] * 2
+                                ) if pipeline.do_classifier_free_guidance else sample1["states"][:, j]
                                 noise_pred1 = unet(
-                                    sample1["states"][:, j],
+                                    latents,
                                     sample1["timesteps"][:, j],
                                     sample1["prompt_embeds"],
                                     timestep_cond=timestep_cond,
@@ -370,6 +376,11 @@ def mvczigal_trainer(accelerator, cfg, pipeline, unet, reward_fn, mv_reward_fn, 
                                         "time_ids": sample1["add_time_ids"],
                                     }
                                 ).sample
+                                if pipeline.do_classifier_free_guidance:
+                                    noise_pred_uncond, noise_pred_text = noise_pred1.chunk(2)
+                                    noise_pred1 = noise_pred_uncond + pipeline.guidance_scale * (
+                                        noise_pred_text - noise_pred_uncond
+                                    )
                                 log_probs = []
                                 for k in range(cfg.training.train_batch_size_per_gpu * cfg.training.num_views):
                                     log_prob = pipeline.scheduler.step(
@@ -383,8 +394,11 @@ def mvczigal_trainer(accelerator, cfg, pipeline, unet, reward_fn, mv_reward_fn, 
                                     log_probs.append(log_prob)
                                 log_prob1 = torch.cat(log_probs)
 
+                                latents = torch.cat(
+                                    [sample2["states"][:, j]] * 2
+                                ) if pipeline.do_classifier_free_guidance else sample2["states"][:, j]
                                 noise_pred2 = unet(
-                                    sample2["states"][:, j],
+                                    latents,
                                     sample2["timesteps"][:, j],
                                     sample2["prompt_embeds"],
                                     timestep_cond=timestep_cond,
@@ -401,6 +415,11 @@ def mvczigal_trainer(accelerator, cfg, pipeline, unet, reward_fn, mv_reward_fn, 
                                         "time_ids": sample2["add_time_ids"],
                                     }
                                 ).sample
+                                if pipeline.do_classifier_free_guidance:
+                                    noise_pred_uncond, noise_pred_text = noise_pred2.chunk(2)
+                                    noise_pred2 = noise_pred_uncond + pipeline.guidance_scale * (
+                                        noise_pred_text - noise_pred_uncond
+                                    )
                                 log_probs = []
                                 for k in range(cfg.training.train_batch_size_per_gpu * cfg.training.num_views):
                                     log_prob = pipeline.scheduler.step(

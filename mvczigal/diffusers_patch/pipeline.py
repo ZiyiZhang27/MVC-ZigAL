@@ -702,16 +702,11 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
             "timesteps": timesteps.repeat(states.shape[0], 1).to(device),
             "prompt_embeds": prompt_embeds,
             "add_text_embeds": add_text_embeds,
-            # "prompt_embeds_ret": prompt_embeds_ret,
-            # "negative_prompt_embeds_ret": negative_prompt_embeds_ret,
-            # "add_text_embeds_ret": add_text_embeds_ret,
-            # "negative_pooled_prompt_embeds_ret": negative_pooled_prompt_embeds_ret,
             "add_time_ids": add_time_ids,
             "adapter_state_0": adapter_state[0],
             "adapter_state_1": adapter_state[1],
             "adapter_state_2": adapter_state[2],
             "adapter_state_3": adapter_state[3],
-            **added_cond_kwargs,
         }
 
     @torch.no_grad()
@@ -1443,16 +1438,11 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
             "timesteps": timesteps.repeat(states.shape[0], 1).to(device),
             "prompt_embeds": prompt_embeds,
             "add_text_embeds": add_text_embeds,
-            # "prompt_embeds_ret": prompt_embeds_ret,
-            # "negative_prompt_embeds_ret": negative_prompt_embeds_ret,
-            # "add_text_embeds_ret": add_text_embeds_ret,
-            # "negative_pooled_prompt_embeds_ret": negative_pooled_prompt_embeds_ret,
             "add_time_ids": add_time_ids,
             "adapter_state_0": adapter_state[0],
             "adapter_state_1": adapter_state[1],
             "adapter_state_2": adapter_state[2],
             "adapter_state_3": adapter_state[3],
-            **added_cond_kwargs,
         }
 
     ### NEW: adapters ###
