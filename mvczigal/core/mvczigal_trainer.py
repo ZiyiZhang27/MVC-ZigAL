@@ -366,7 +366,7 @@ def mvczigal_trainer(accelerator, cfg, pipeline, unet, reward_fn, mv_reward_fn, 
                                         for i in range(4)
                                     ],
                                     added_cond_kwargs={
-                                        "text_embeds": sample1["text_embeds"],
+                                        "text_embeds": sample1["add_text_embeds"],
                                         "time_ids": sample1["add_time_ids"],
                                     }
                                 ).sample
@@ -397,7 +397,7 @@ def mvczigal_trainer(accelerator, cfg, pipeline, unet, reward_fn, mv_reward_fn, 
                                         for i in range(4)
                                     ],
                                     added_cond_kwargs={
-                                        "text_embeds": sample2["text_embeds"],
+                                        "text_embeds": sample2["add_text_embeds"],
                                         "time_ids": sample2["add_time_ids"],
                                     }
                                 ).sample
