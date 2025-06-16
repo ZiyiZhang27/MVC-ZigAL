@@ -34,7 +34,7 @@ def mvczigal_trainer(accelerator, cfg, pipeline, unet, reward_fn, mv_reward_fn, 
     )
     lambda_max = cfg.training.lambda_max if cfg.training.lambda_max else None
     lambda_optimizer = torch.optim.SGD([lagrangian_multiplier], lr=cfg.training.lambda_lr)
-    constrain_threshold = cfg.training.constrain_threshold
+    constrain_threshold = cfg.training.constrain_threshold_init
 
     # for some reason, autocast is necessary for non-lora training but not for lora training, and it uses
     # more memory

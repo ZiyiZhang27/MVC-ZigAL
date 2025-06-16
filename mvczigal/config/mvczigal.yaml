@@ -41,7 +41,7 @@ training:
   lambda_max: 5.0
   lambda_update_delay_steps: 0
   ema_beta: 0.99
-  constrain_threshold: 0
+  constrain_threshold_init: 0
   prompt_set: SimpleAnimals
   negative_prompt: "watermark, ugly, deformed, noisy, blurry, low contrast"
   reward_fn: pick_score
