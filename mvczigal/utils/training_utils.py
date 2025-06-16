@@ -11,6 +11,7 @@ def run_pipeline(
     negative_prompt,
     num_views,
     lora_scale,
+    eta,
     device,
     return_dict=True,
     latents=None,
@@ -48,6 +49,7 @@ def run_pipeline(
             control_image=control_images,
             control_conditioning_scale=1.0,
             latents=latents,
+            eta=eta,
         )
     else:
         return pipeline(
@@ -64,4 +66,5 @@ def run_pipeline(
             control_image=control_images,
             control_conditioning_scale=1.0,
             latents=latents,
+            eta=eta,
         )

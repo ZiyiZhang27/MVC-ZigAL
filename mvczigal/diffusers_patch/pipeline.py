@@ -108,9 +108,6 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
 
         image = image.to(device=device, dtype=dtype)
 
-        if do_classifier_free_guidance:
-            image = torch.cat([image] * 2)
-
         return image
 
     @torch.no_grad()
@@ -446,21 +443,18 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
         else:
             negative_add_time_ids = add_time_ids
 
+        add_time_ids_ret = add_time_ids.clone().to(device)
+        negative_add_time_ids_ret = negative_add_time_ids.clone().to(device)
         if self.do_classifier_free_guidance:
-            # prepare returns
-            prompt_embeds_ret = prompt_embeds.to(device)
-            negative_prompt_embeds_ret = negative_prompt_embeds.to(device)
-            add_text_embeds_ret = add_text_embeds.to(device)
-            negative_pooled_prompt_embeds_ret = negative_pooled_prompt_embeds.to(device)
+            prompt_embeds_ret = prompt_embeds.clone().to(device)
+            add_text_embeds_ret = add_text_embeds.clone().to(device)
 
             prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds], dim=0)
             add_text_embeds = torch.cat([negative_pooled_prompt_embeds, add_text_embeds], dim=0)
             add_time_ids = torch.cat([negative_add_time_ids, add_time_ids], dim=0)
         else:
-            prompt_embeds_ret = None
-            negative_prompt_embeds_ret = None
-            add_text_embeds_ret = None
-            negative_pooled_prompt_embeds_ret = None
+            prompt_embeds_ret = prompt_embeds.to(device)
+            add_text_embeds_ret = add_text_embeds.to(device)
 
         prompt_embeds = prompt_embeds.to(device)
         add_text_embeds = add_text_embeds.to(device)
@@ -486,11 +480,15 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
             dtype=latents.dtype,
             do_classifier_free_guidance=self.do_classifier_free_guidance,
         )
-        control_image_feature = control_image_feature.repeat(batch_size, 1, 1, 1)
 
         adapter_state = self.cond_encoder(control_image_feature)
+        adapter_state_ret = []
         for i, state in enumerate(adapter_state):
-            adapter_state[i] = state * control_conditioning_scale
+            adapter_state_ret.append(state)
+            if self.do_classifier_free_guidance:
+                adapter_state[i] = state.repeat(2 * batch_size, 1, 1, 1) * control_conditioning_scale
+            else:
+                adapter_state[i] = state.repeat(batch_size, 1, 1, 1) * control_conditioning_scale
 
         # Preprocess controlnet image if provided
         do_controlnet = controlnet_image is not None and hasattr(self, "controlnet")
@@ -692,22 +690,43 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
         states = torch.stack(states, dim=1)  # (batch_size * num_views, num_inference_steps + 1, 4, height, width)
         log_probs = torch.stack(log_probs, dim=1)  # (batch_size * num_views, num_inference_steps, 1)
 
-        return {
-            "images": image,
-            "states": states[:, :-1],  # each entry is the latent before timestep t
-            "next_states": states[:, 1:],  # each entry is the latent after timestep t
-            "log_probs": log_probs,
-            "step_index": torch.arange(len(timesteps), device=device)
-            .repeat(states.shape[0], 1),  # (batch_size * num_views, num_inference_steps)
-            "timesteps": timesteps.repeat(states.shape[0], 1).to(device),
-            "prompt_embeds": prompt_embeds,
-            "add_text_embeds": add_text_embeds,
-            "add_time_ids": add_time_ids,
-            "adapter_state_0": adapter_state[0],
-            "adapter_state_1": adapter_state[1],
-            "adapter_state_2": adapter_state[2],
-            "adapter_state_3": adapter_state[3],
-        }
+        if self.do_classifier_free_guidance:
+            return {
+                "images": image,
+                "states": states[:, :-1],  # each entry is the latent before timestep t
+                "next_states": states[:, 1:],  # each entry is the latent after timestep t
+                "log_probs": log_probs,
+                "step_index": torch.arange(len(timesteps), device=device)
+                .repeat(states.shape[0], 1),  # (batch_size * num_views, num_inference_steps)
+                "timesteps": timesteps.repeat(states.shape[0], 1).to(device),
+                "prompt_embeds": prompt_embeds_ret,
+                "add_text_embeds": add_text_embeds_ret,
+                "add_time_ids": add_time_ids_ret,
+                "negative_prompt_embeds": negative_prompt_embeds,
+                "negative_pooled_prompt_embeds": negative_pooled_prompt_embeds,
+                "negative_add_time_ids": negative_add_time_ids_ret,
+                "adapter_state_0": adapter_state_ret[0],
+                "adapter_state_1": adapter_state_ret[1],
+                "adapter_state_2": adapter_state_ret[2],
+                "adapter_state_3": adapter_state_ret[3],
+            }
+        else:
+            return {
+                "images": image,
+                "states": states[:, :-1],  # each entry is the latent before timestep t
+                "next_states": states[:, 1:],  # each entry is the latent after timestep t
+                "log_probs": log_probs,
+                "step_index": torch.arange(len(timesteps), device=device)
+                .repeat(states.shape[0], 1),  # (batch_size * num_views, num_inference_steps)
+                "timesteps": timesteps.repeat(states.shape[0], 1).to(device),
+                "prompt_embeds": prompt_embeds_ret,
+                "add_text_embeds": add_text_embeds_ret,
+                "add_time_ids": add_time_ids_ret,
+                "adapter_state_0": adapter_state_ret[0],
+                "adapter_state_1": adapter_state_ret[1],
+                "adapter_state_2": adapter_state_ret[2],
+                "adapter_state_3": adapter_state_ret[3],
+            }
 
     @torch.no_grad()
     def zmv_sampling(
@@ -760,7 +779,6 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
         # ZMV-Sampling
         T_max: int = 1,
         inv_guidance_scale: float = 1.0,
-        inv_mv_scale: float = 1.0,
         lambda_step: int = 1,
         **kwargs,
     ):
@@ -1049,21 +1067,18 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
         else:
             negative_add_time_ids = add_time_ids
 
+        add_time_ids_ret = add_time_ids.clone().to(device)
+        negative_add_time_ids_ret = negative_add_time_ids.clone().to(device)
         if self.do_classifier_free_guidance:
-            # prepare returns
-            prompt_embeds_ret = prompt_embeds.to(device)
-            negative_prompt_embeds_ret = negative_prompt_embeds.to(device)
-            add_text_embeds_ret = add_text_embeds.to(device)
-            negative_pooled_prompt_embeds_ret = negative_pooled_prompt_embeds.to(device)
+            prompt_embeds_ret = prompt_embeds.clone().to(device)
+            add_text_embeds_ret = add_text_embeds.clone().to(device)
 
             prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds], dim=0)
             add_text_embeds = torch.cat([negative_pooled_prompt_embeds, add_text_embeds], dim=0)
             add_time_ids = torch.cat([negative_add_time_ids, add_time_ids], dim=0)
         else:
-            prompt_embeds_ret = None
-            negative_prompt_embeds_ret = None
-            add_text_embeds_ret = None
-            negative_pooled_prompt_embeds_ret = None
+            prompt_embeds_ret = prompt_embeds.to(device)
+            add_text_embeds_ret = add_text_embeds.to(device)
 
         prompt_embeds = prompt_embeds.to(device)
         add_text_embeds = add_text_embeds.to(device)
@@ -1089,11 +1104,15 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
             dtype=latents.dtype,
             do_classifier_free_guidance=self.do_classifier_free_guidance,
         )
-        control_image_feature = control_image_feature.repeat(batch_size, 1, 1, 1)
 
         adapter_state = self.cond_encoder(control_image_feature)
+        adapter_state_ret = []
         for i, state in enumerate(adapter_state):
-            adapter_state[i] = state * control_conditioning_scale
+            adapter_state_ret.append(state)
+            if self.do_classifier_free_guidance:
+                adapter_state[i] = state.repeat(2 * batch_size, 1, 1, 1) * control_conditioning_scale
+            else:
+                adapter_state[i] = state.repeat(batch_size, 1, 1, 1) * control_conditioning_scale
 
         # Preprocess controlnet image if provided
         do_controlnet = controlnet_image is not None and hasattr(self, "controlnet")
@@ -1256,7 +1275,7 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
                             encoder_hidden_states=prompt_embeds,
                             timestep_cond=inv_timestep_cond,
                             cross_attention_kwargs={
-                                "mv_scale": inv_mv_scale,
+                                "mv_scale": mv_scale,
                                 **(self.cross_attention_kwargs or {}),
                             },
                             down_intrablock_additional_residuals=down_intrablock_additional_residuals,
@@ -1428,22 +1447,43 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
         next_states = torch.stack(next_states, dim=1)  # (batch_size * num_views, num_inference_steps, 4, height, width)
         log_probs = torch.stack(log_probs, dim=1)  # (batch_size * num_views, num_inference_steps, 1)
 
-        return {
-            "images": image,
-            "states": states,  # each entry is the latent before timestep t
-            "next_states": next_states,  # each entry is the latent after timestep t
-            "log_probs": log_probs,
-            "step_index": torch.arange(len(timesteps), device=device)
-            .repeat(states.shape[0], 1),  # (batch_size * num_views, num_inference_steps)
-            "timesteps": timesteps.repeat(states.shape[0], 1).to(device),
-            "prompt_embeds": prompt_embeds,
-            "add_text_embeds": add_text_embeds,
-            "add_time_ids": add_time_ids,
-            "adapter_state_0": adapter_state[0],
-            "adapter_state_1": adapter_state[1],
-            "adapter_state_2": adapter_state[2],
-            "adapter_state_3": adapter_state[3],
-        }
+        if self.do_classifier_free_guidance:
+            return {
+                "images": image,
+                "states": states,  # each entry is the latent before timestep t
+                "next_states": next_states,  # each entry is the latent after timestep t
+                "log_probs": log_probs,
+                "step_index": torch.arange(len(timesteps), device=device)
+                .repeat(states.shape[0], 1),  # (batch_size * num_views, num_inference_steps)
+                "timesteps": timesteps.repeat(states.shape[0], 1).to(device),
+                "prompt_embeds": prompt_embeds_ret,
+                "add_text_embeds": add_text_embeds_ret,
+                "add_time_ids": add_time_ids_ret,
+                "negative_prompt_embeds": negative_prompt_embeds,
+                "negative_pooled_prompt_embeds": negative_pooled_prompt_embeds,
+                "negative_add_time_ids": negative_add_time_ids_ret,
+                "adapter_state_0": adapter_state_ret[0],
+                "adapter_state_1": adapter_state_ret[1],
+                "adapter_state_2": adapter_state_ret[2],
+                "adapter_state_3": adapter_state_ret[3],
+            }
+        else:
+            return {
+                "images": image,
+                "states": states,  # each entry is the latent before timestep t
+                "next_states": next_states,  # each entry is the latent after timestep t
+                "log_probs": log_probs,
+                "step_index": torch.arange(len(timesteps), device=device)
+                .repeat(states.shape[0], 1),  # (batch_size * num_views, num_inference_steps)
+                "timesteps": timesteps.repeat(states.shape[0], 1).to(device),
+                "prompt_embeds": prompt_embeds_ret,
+                "add_text_embeds": add_text_embeds_ret,
+                "add_time_ids": add_time_ids_ret,
+                "adapter_state_0": adapter_state_ret[0],
+                "adapter_state_1": adapter_state_ret[1],
+                "adapter_state_2": adapter_state_ret[2],
+                "adapter_state_3": adapter_state_ret[3],
+            }
 
     ### NEW: adapters ###
     def _init_custom_adapter(

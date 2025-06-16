@@ -71,11 +71,11 @@ def prepare_pipeline(
             scheduler_class=inv_scheduler_class,
         )
     pipe.scheduler = scheduler
+
     pipe.init_custom_adapter(num_views=num_views)
     pipe.load_custom_adapter(
         adapter_path, weight_name="mvadapter_t2mv_sdxl.safetensors"
     )
-
     pipe.to(device=device, dtype=dtype)
     pipe.cond_encoder.to(device=device, dtype=dtype)
 
@@ -148,6 +148,7 @@ def run_pipeline(
             control_conditioning_scale=1.0,
             negative_prompt=negative_prompt,
             cross_attention_kwargs={"scale": lora_scale},
+            eta=1.0,
             **pipe_kwargs,
         ).images
     else:
@@ -162,6 +163,7 @@ def run_pipeline(
             control_conditioning_scale=1.0,
             negative_prompt=negative_prompt,
             cross_attention_kwargs={"scale": lora_scale},
+            eta=1.0,
             **pipe_kwargs,
         ).images
 
@@ -223,4 +225,6 @@ if __name__ == "__main__":
         device=args.device,
         zmv_sampling=args.zmv_sampling,
     )
+    # for idx, image in enumerate(images):
+    #     image.save(args.output + f"_{idx}.png")
     make_image_grid(images, rows=1).save(args.output)

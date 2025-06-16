@@ -1,17 +1,19 @@
 import os
 import datetime
 import torch
+from safetensors.torch import load_file
 from accelerate import Accelerator
 from accelerate.utils import set_seed, ProjectConfiguration
 from accelerate.logging import get_logger
 from omegaconf import DictConfig, OmegaConf
 import hydra
-from diffusers import AutoencoderKL, UNet2DConditionModel
+from diffusers import AutoencoderKL, UNet2DConditionModel, DDIMInverseScheduler
 from diffusers.training_utils import cast_training_params
 from peft import LoraConfig
 from mvadapter.schedulers.scheduling_shift_snr import ShiftSNRScheduler
 from mvczigal.diffusers_patch.lcm_scheduler import LCMScheduler
 from mvczigal.diffusers_patch.lcm_inv_scheduler import LCMInverseScheduler
+from mvczigal.diffusers_patch.ddim_scheduler import DDIMScheduler
 from mvczigal.diffusers_patch.pipeline import MVAdapterT2MVSDXLPipeline
 from mvczigal.rewards import rewards
 from mvczigal.data import prompts
@@ -57,27 +59,41 @@ def main(cfg: DictConfig) -> None:
 
     # load pipeline
     vae = AutoencoderKL.from_pretrained(cfg.pretrained.vae_model, torch_dtype=inference_dtype)
-    unet = UNet2DConditionModel.from_pretrained(cfg.pretrained.unet_model, torch_dtype=inference_dtype)
+    if cfg.pretrained.unet_model and not os.path.exists(cfg.pretrained.unet_model):
+        unet = UNet2DConditionModel.from_pretrained(cfg.pretrained.unet_model, torch_dtype=inference_dtype)
+    else:
+        unet = UNet2DConditionModel.from_pretrained(cfg.pretrained.base_model, subfolder="unet", torch_dtype=inference_dtype)
     pipeline = MVAdapterT2MVSDXLPipeline.from_pretrained(
         cfg.pretrained.base_model,
         torch_dtype=inference_dtype,
         vae=vae,
         unet=unet,
     )
+    if cfg.pretrained.unet_model and os.path.exists(cfg.pretrained.unet_model):
+        unet.load_state_dict(load_file(cfg.pretrained.unet_model))
+
+    if cfg.training.scheduler == "lcm":
+        scheduler_class = LCMScheduler
+        inv_scheduler_class = LCMInverseScheduler
+    elif cfg.training.scheduler == "ddim":
+        scheduler_class = DDIMScheduler
+        inv_scheduler_class = DDIMInverseScheduler
+    else:
+        raise ValueError(f"Unsupported scheduler: {cfg.training.scheduler}")
 
     # load scheduler
     scheduler = ShiftSNRScheduler.from_scheduler(
         pipeline.scheduler,
         shift_mode="interpolated",
         shift_scale=8.0,
-        scheduler_class=LCMScheduler,
+        scheduler_class=scheduler_class,
     )
     # load inverse scheduler
     pipeline.inv_scheduler = ShiftSNRScheduler.from_scheduler(
         pipeline.scheduler,
         shift_mode="interpolated",
         shift_scale=8.0,
-        scheduler_class=LCMInverseScheduler,
+        scheduler_class=inv_scheduler_class,
     )
     pipeline.scheduler = scheduler
 

@@ -23,6 +23,8 @@ training:
   num_views: 6
   num_inference_steps: 8
   guidance_scale: 7.0
+  scheduler: "lcm"
+  eta: 1.0
   lr: 1e-4
   sample_batch_size_per_gpu: 4
   train_batch_size_per_gpu: 1

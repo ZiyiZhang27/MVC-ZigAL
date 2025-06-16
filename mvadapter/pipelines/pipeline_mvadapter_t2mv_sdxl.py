@@ -762,7 +762,6 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
         # ZMV-Sampling
         T_max: int = 1,
         inv_guidance_scale: float = 1.0,
-        inv_mv_scale: float = 1.0,
         lambda_step: int = 1,
         **kwargs,
     ):
@@ -1261,7 +1260,7 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
                             encoder_hidden_states=prompt_embeds,
                             timestep_cond=inv_timestep_cond,
                             cross_attention_kwargs={
-                                "mv_scale": inv_mv_scale,
+                                "mv_scale": mv_scale,
                                 **(self.cross_attention_kwargs or {}),
                             },
                             down_intrablock_additional_residuals=down_intrablock_additional_residuals,
