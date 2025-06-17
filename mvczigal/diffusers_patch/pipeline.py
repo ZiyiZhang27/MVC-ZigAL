@@ -108,6 +108,9 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
 
         image = image.to(device=device, dtype=dtype)
 
+        if do_classifier_free_guidance:
+            image = torch.cat([image] * 2)
+
         return image
 
     @torch.no_grad()
@@ -443,8 +446,6 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
         else:
             negative_add_time_ids = add_time_ids
 
-        add_time_ids_ret = add_time_ids.clone().to(device)
-        negative_add_time_ids_ret = negative_add_time_ids.clone().to(device)
         if self.do_classifier_free_guidance:
             prompt_embeds_ret = prompt_embeds.clone().to(device)
             add_text_embeds_ret = add_text_embeds.clone().to(device)
@@ -480,15 +481,11 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
             dtype=latents.dtype,
             do_classifier_free_guidance=self.do_classifier_free_guidance,
         )
+        control_image_feature = control_image_feature.repeat(batch_size, 1, 1, 1)
 
         adapter_state = self.cond_encoder(control_image_feature)
-        adapter_state_ret = []
         for i, state in enumerate(adapter_state):
-            adapter_state_ret.append(state)
-            if self.do_classifier_free_guidance:
-                adapter_state[i] = state.repeat(2 * batch_size, 1, 1, 1) * control_conditioning_scale
-            else:
-                adapter_state[i] = state.repeat(batch_size, 1, 1, 1) * control_conditioning_scale
+            adapter_state[i] = state * control_conditioning_scale
 
         # Preprocess controlnet image if provided
         do_controlnet = controlnet_image is not None and hasattr(self, "controlnet")
@@ -701,14 +698,13 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
                 "timesteps": timesteps.repeat(states.shape[0], 1).to(device),
                 "prompt_embeds": prompt_embeds_ret,
                 "add_text_embeds": add_text_embeds_ret,
-                "add_time_ids": add_time_ids_ret,
+                "add_time_ids": add_time_ids,
                 "negative_prompt_embeds": negative_prompt_embeds,
                 "negative_pooled_prompt_embeds": negative_pooled_prompt_embeds,
-                "negative_add_time_ids": negative_add_time_ids_ret,
-                "adapter_state_0": adapter_state_ret[0],
-                "adapter_state_1": adapter_state_ret[1],
-                "adapter_state_2": adapter_state_ret[2],
-                "adapter_state_3": adapter_state_ret[3],
+                "adapter_state_0": adapter_state[0],
+                "adapter_state_1": adapter_state[1],
+                "adapter_state_2": adapter_state[2],
+                "adapter_state_3": adapter_state[3],
             }
         else:
             return {
@@ -721,11 +717,11 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
                 "timesteps": timesteps.repeat(states.shape[0], 1).to(device),
                 "prompt_embeds": prompt_embeds_ret,
                 "add_text_embeds": add_text_embeds_ret,
-                "add_time_ids": add_time_ids_ret,
-                "adapter_state_0": adapter_state_ret[0],
-                "adapter_state_1": adapter_state_ret[1],
-                "adapter_state_2": adapter_state_ret[2],
-                "adapter_state_3": adapter_state_ret[3],
+                "add_time_ids": add_time_ids,
+                "adapter_state_0": adapter_state[0],
+                "adapter_state_1": adapter_state[1],
+                "adapter_state_2": adapter_state[2],
+                "adapter_state_3": adapter_state[3],
             }
 
     @torch.no_grad()
@@ -1067,8 +1063,6 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
         else:
             negative_add_time_ids = add_time_ids
 
-        add_time_ids_ret = add_time_ids.clone().to(device)
-        negative_add_time_ids_ret = negative_add_time_ids.clone().to(device)
         if self.do_classifier_free_guidance:
             prompt_embeds_ret = prompt_embeds.clone().to(device)
             add_text_embeds_ret = add_text_embeds.clone().to(device)
@@ -1104,15 +1098,11 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
             dtype=latents.dtype,
             do_classifier_free_guidance=self.do_classifier_free_guidance,
         )
+        control_image_feature = control_image_feature.repeat(batch_size, 1, 1, 1)
 
         adapter_state = self.cond_encoder(control_image_feature)
-        adapter_state_ret = []
         for i, state in enumerate(adapter_state):
-            adapter_state_ret.append(state)
-            if self.do_classifier_free_guidance:
-                adapter_state[i] = state.repeat(2 * batch_size, 1, 1, 1) * control_conditioning_scale
-            else:
-                adapter_state[i] = state.repeat(batch_size, 1, 1, 1) * control_conditioning_scale
+            adapter_state[i] = state * control_conditioning_scale
 
         # Preprocess controlnet image if provided
         do_controlnet = controlnet_image is not None and hasattr(self, "controlnet")
@@ -1458,14 +1448,13 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
                 "timesteps": timesteps.repeat(states.shape[0], 1).to(device),
                 "prompt_embeds": prompt_embeds_ret,
                 "add_text_embeds": add_text_embeds_ret,
-                "add_time_ids": add_time_ids_ret,
+                "add_time_ids": add_time_ids,
                 "negative_prompt_embeds": negative_prompt_embeds,
                 "negative_pooled_prompt_embeds": negative_pooled_prompt_embeds,
-                "negative_add_time_ids": negative_add_time_ids_ret,
-                "adapter_state_0": adapter_state_ret[0],
-                "adapter_state_1": adapter_state_ret[1],
-                "adapter_state_2": adapter_state_ret[2],
-                "adapter_state_3": adapter_state_ret[3],
+                "adapter_state_0": adapter_state[0],
+                "adapter_state_1": adapter_state[1],
+                "adapter_state_2": adapter_state[2],
+                "adapter_state_3": adapter_state[3],
             }
         else:
             return {
@@ -1478,11 +1467,11 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
                 "timesteps": timesteps.repeat(states.shape[0], 1).to(device),
                 "prompt_embeds": prompt_embeds_ret,
                 "add_text_embeds": add_text_embeds_ret,
-                "add_time_ids": add_time_ids_ret,
-                "adapter_state_0": adapter_state_ret[0],
-                "adapter_state_1": adapter_state_ret[1],
-                "adapter_state_2": adapter_state_ret[2],
-                "adapter_state_3": adapter_state_ret[3],
+                "add_time_ids": add_time_ids,
+                "adapter_state_0": adapter_state[0],
+                "adapter_state_1": adapter_state[1],
+                "adapter_state_2": adapter_state[2],
+                "adapter_state_3": adapter_state[3],
             }
 
     ### NEW: adapters ###

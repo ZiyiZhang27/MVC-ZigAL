@@ -17,7 +17,6 @@ from mvczigal.diffusers_patch.ddim_scheduler import DDIMScheduler
 from mvczigal.diffusers_patch.pipeline import MVAdapterT2MVSDXLPipeline
 from mvczigal.rewards import rewards
 from mvczigal.data import prompts
-from mvczigal.core.mvczigal_trainer import mvczigal_trainer
 
 logger = get_logger(__name__)
 
@@ -62,7 +61,9 @@ def main(cfg: DictConfig) -> None:
     if cfg.pretrained.unet_model and not os.path.exists(cfg.pretrained.unet_model):
         unet = UNet2DConditionModel.from_pretrained(cfg.pretrained.unet_model, torch_dtype=inference_dtype)
     else:
-        unet = UNet2DConditionModel.from_pretrained(cfg.pretrained.base_model, subfolder="unet", torch_dtype=inference_dtype)
+        unet = UNet2DConditionModel.from_pretrained(
+            cfg.pretrained.base_model, subfolder="unet", torch_dtype=inference_dtype
+        )
     pipeline = MVAdapterT2MVSDXLPipeline.from_pretrained(
         cfg.pretrained.base_model,
         torch_dtype=inference_dtype,
@@ -159,6 +160,7 @@ def main(cfg: DictConfig) -> None:
     prompt_set = getattr(prompts, cfg.training.prompt_set)(cfg.training.sample_batch_size_per_gpu)
 
     # start training
+    from mvczigal.core.mvczigal_trainer import mvczigal_trainer
     mvczigal_trainer(accelerator, cfg, pipeline, unet, reward_fn, mv_reward_fn, prompt_set)
 
     accelerator.end_training()

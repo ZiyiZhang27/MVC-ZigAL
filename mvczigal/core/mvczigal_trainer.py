@@ -120,14 +120,6 @@ def mvczigal_trainer(accelerator, cfg, pipeline, unet, reward_fn, mv_reward_fn, 
                     sample_dict1["mv_rewards_1"] = torch.as_tensor(mv_rewards_1, device=accelerator.device)
                     sample_dict1["mv_rewards_2"] = torch.as_tensor(mv_rewards_2, device=accelerator.device)
 
-                sample_dict1["prompt_ids"] = pipeline.tokenizer(
-                    prompts,
-                    return_tensors="pt",
-                    padding="max_length",
-                    truncation=True,
-                    max_length=pipeline.tokenizer.model_max_length,
-                ).input_ids.to(accelerator.device)
-
                 initial_latents = sample_dict1["states"][:, 0]
 
                 samples1.append(sample_dict1)
@@ -180,14 +172,6 @@ def mvczigal_trainer(accelerator, cfg, pipeline, unet, reward_fn, mv_reward_fn, 
                     sample_dict2["mv_rewards_1"] = torch.as_tensor(mv_rewards_1, device=accelerator.device)
                     sample_dict2["mv_rewards_2"] = torch.as_tensor(mv_rewards_2, device=accelerator.device)
 
-                sample_dict2["prompt_ids"] = pipeline.tokenizer(
-                    prompts,
-                    return_tensors="pt",
-                    padding="max_length",
-                    truncation=True,
-                    max_length=pipeline.tokenizer.model_max_length,
-                ).input_ids.to(accelerator.device)
-
                 samples2.append(sample_dict2)
                 del sample_dict2
                 torch.cuda.empty_cache()
@@ -200,9 +184,15 @@ def mvczigal_trainer(accelerator, cfg, pipeline, unet, reward_fn, mv_reward_fn, 
             rewards = accelerator.gather(torch.cat([samples1["rewards"], samples2["rewards"]])).cpu().numpy()
             mv_rewards = accelerator.gather(torch.cat([samples1["mv_rewards"], samples2["mv_rewards"]])).cpu().numpy()
             if cfg.training.mv_reward_fn == "hyper_score":
-                mv_rewards_0 = accelerator.gather(torch.cat([samples1["mv_rewards_0"], samples2["mv_rewards_0"]])).cpu().numpy()
-                mv_rewards_1 = accelerator.gather(torch.cat([samples1["mv_rewards_1"], samples2["mv_rewards_1"]])).cpu().numpy()
-                mv_rewards_2 = accelerator.gather(torch.cat([samples1["mv_rewards_2"], samples2["mv_rewards_2"]])).cpu().numpy()
+                mv_rewards_0 = accelerator.gather(
+                    torch.cat([samples1["mv_rewards_0"], samples2["mv_rewards_0"]])
+                ).cpu().numpy()
+                mv_rewards_1 = accelerator.gather(
+                    torch.cat([samples1["mv_rewards_1"], samples2["mv_rewards_1"]])
+                ).cpu().numpy()
+                mv_rewards_2 = accelerator.gather(
+                    torch.cat([samples1["mv_rewards_2"], samples2["mv_rewards_2"]])
+                ).cpu().numpy()
 
             del samples1["rewards"], samples1["mv_rewards"], samples2["rewards"], samples2["mv_rewards"]
             if cfg.training.mv_reward_fn == "hyper_score":
@@ -273,7 +263,6 @@ def mvczigal_trainer(accelerator, cfg, pipeline, unet, reward_fn, mv_reward_fn, 
             advantages = (rewards - rewards.mean()) / (rewards.std() + 1e-8)
             mv_advantages = (mv_rewards - mv_rewards.mean()) / (mv_rewards.std() + 1e-8)
 
-            del samples1["prompt_ids"], samples2["prompt_ids"]
             del rewards, mv_rewards
             del mv_rewards_0, mv_rewards_1, mv_rewards_2
 
@@ -314,27 +303,20 @@ def mvczigal_trainer(accelerator, cfg, pipeline, unet, reward_fn, mv_reward_fn, 
                     ]
 
                 # rebatch for training
-                ex_keys = [
-                    "add_time_ids", "negative_add_time_ids",
-                    "adapter_state_0", "adapter_state_1", "adapter_state_2", "adapter_state_3",
-                ]
-                super_batch_size = total_batch_size // (cfg.training.train_batch_size_per_gpu * cfg.training.num_views)
-                num_sample_iters = cfg.training.num_sample_iters
+                ex_keys = ["add_time_ids", "adapter_state_0", "adapter_state_1", "adapter_state_2", "adapter_state_3"]
                 samples_batched1 = {
                     k: (
-                        v.reshape(super_batch_size, -1, *v.shape[1:]) if k not in ex_keys else
-                        v.reshape((num_sample_iters, -1) + v.shape[1:]).repeat(
-                            super_batch_size // num_sample_iters, *[1] * v.dim()
-                        )
+                        v.reshape(-1, cfg.training.train_batch_size_per_gpu * 2 * cfg.training.num_views, *v.shape[1:])
+                        if pipeline.do_classifier_free_guidance and k in ex_keys else
+                        v.reshape(-1, cfg.training.train_batch_size_per_gpu * cfg.training.num_views, *v.shape[1:])
                     )
                     for k, v in samples1.items()
                 }
                 samples_batched2 = {
                     k: (
-                        v.reshape(super_batch_size, -1, *v.shape[1:]) if k not in ex_keys else
-                        v.reshape((num_sample_iters, -1) + v.shape[1:]).repeat(
-                            super_batch_size // num_sample_iters, *[1] * v.dim()
-                        )
+                        v.reshape(-1, cfg.training.train_batch_size_per_gpu * 2 * cfg.training.num_views, *v.shape[1:])
+                        if pipeline.do_classifier_free_guidance and k in ex_keys else
+                        v.reshape(-1, cfg.training.train_batch_size_per_gpu * cfg.training.num_views, *v.shape[1:])
                     )
                     for k, v in samples2.items()
                 }
@@ -363,6 +345,33 @@ def mvczigal_trainer(accelerator, cfg, pipeline, unet, reward_fn, mv_reward_fn, 
                     disable=not accelerator.is_local_main_process,
                     position=0,
                 ):
+                    if pipeline.do_classifier_free_guidance:
+                        prompt_embeds1 = torch.cat([sample1["negative_prompt_embeds"], sample1["prompt_embeds"]])
+                        prompt_embeds2 = torch.cat([sample2["negative_prompt_embeds"], sample2["prompt_embeds"]])
+                        added_cond_kwargs1 = {
+                            "text_embeds": torch.cat([
+                                sample1["negative_pooled_prompt_embeds"], sample1["add_text_embeds"]
+                            ]),
+                            "time_ids": sample1["add_time_ids"],
+                        }
+                        added_cond_kwargs2 = {
+                            "text_embeds": torch.cat([
+                                sample2["negative_pooled_prompt_embeds"], sample2["add_text_embeds"]
+                            ]),
+                            "time_ids": sample2["add_time_ids"],
+                        }
+                    else:
+                        prompt_embeds1 = sample1["prompt_embeds"]
+                        prompt_embeds2 = sample2["prompt_embeds"]
+                        added_cond_kwargs1 = {
+                            "text_embeds": sample1["add_text_embeds"],
+                            "time_ids": sample1["add_time_ids"],
+                        }
+                        added_cond_kwargs2 = {
+                            "text_embeds": sample2["add_text_embeds"],
+                            "time_ids": sample2["add_time_ids"],
+                        }
+
                     for j in tqdm(
                         range(num_timesteps),
                         desc="Timestep",
@@ -376,53 +385,32 @@ def mvczigal_trainer(accelerator, cfg, pipeline, unet, reward_fn, mv_reward_fn, 
                                 if pipeline.do_classifier_free_guidance:
                                     latents = torch.cat([sample1["states"][:, j]] * 2)
                                     timesteps = torch.cat([sample1["timesteps"][:, j]] * 2)
-                                    prompt_embeds = torch.cat(
-                                        [sample1["negative_prompt_embeds"], sample1["prompt_embeds"]]
-                                    )
-                                    add_text_embeds = torch.cat(
-                                        [sample1["negative_pooled_prompt_embeds"], sample1["add_text_embeds"]]
-                                    )
-                                    add_time_ids = torch.cat(
-                                        [sample1["negative_add_time_ids"], sample1["add_time_ids"]]
-                                    ).repeat(cfg.training.train_batch_size_per_gpu * cfg.training.num_views, 1)
-                                    down_intrablock_additional_residuals = [
-                                        sample1[f"adapter_state_{i}"].repeat(
-                                            2 * cfg.training.train_batch_size_per_gpu, 1, 1, 1
-                                        ) for i in range(4)
-                                    ]
                                 else:
                                     latents = sample1["states"][:, j]
                                     timesteps = sample1["timesteps"][:, j]
-                                    prompt_embeds = sample1["prompt_embeds"]
-                                    add_text_embeds = sample1["add_text_embeds"]
-                                    add_time_ids = sample1["add_time_ids"].repeat(
-                                        cfg.training.train_batch_size_per_gpu * cfg.training.num_views, 1
-                                    )
-                                    down_intrablock_additional_residuals = [
-                                        sample1[f"adapter_state_{i}"].repeat(
-                                            cfg.training.train_batch_size_per_gpu, 1, 1, 1
-                                        ) for i in range(4)
-                                    ]
+
                                 noise_pred1 = unet(
                                     latents,
                                     timesteps,
-                                    prompt_embeds,
+                                    prompt_embeds1,
                                     timestep_cond=timestep_cond,
                                     cross_attention_kwargs={
                                         "mv_scale": 1.0,
                                         **(pipeline.cross_attention_kwargs or {}),
                                     },
-                                    down_intrablock_additional_residuals=down_intrablock_additional_residuals,
-                                    added_cond_kwargs={
-                                        "text_embeds": add_text_embeds,
-                                        "time_ids": add_time_ids,
-                                    }
+                                    down_intrablock_additional_residuals=[
+                                        sample1[f"adapter_state_{i}"].clone()
+                                        for i in range(4)
+                                    ],
+                                    added_cond_kwargs=added_cond_kwargs1,
                                 ).sample
+
                                 if pipeline.do_classifier_free_guidance:
                                     noise_pred_uncond, noise_pred_text = noise_pred1.chunk(2)
                                     noise_pred1 = noise_pred_uncond + pipeline.guidance_scale * (
                                         noise_pred_text - noise_pred_uncond
                                     )
+
                                 log_probs = []
                                 for k in range(cfg.training.train_batch_size_per_gpu * cfg.training.num_views):
                                     log_prob = pipeline.scheduler.step(
@@ -440,53 +428,32 @@ def mvczigal_trainer(accelerator, cfg, pipeline, unet, reward_fn, mv_reward_fn, 
                                 if pipeline.do_classifier_free_guidance:
                                     latents = torch.cat([sample2["states"][:, j]] * 2)
                                     timesteps = torch.cat([sample2["timesteps"][:, j]] * 2)
-                                    prompt_embeds = torch.cat(
-                                        [sample2["negative_prompt_embeds"], sample2["prompt_embeds"]]
-                                    )
-                                    add_text_embeds = torch.cat(
-                                        [sample2["negative_pooled_prompt_embeds"], sample2["add_text_embeds"]]
-                                    )
-                                    add_time_ids = torch.cat(
-                                        [sample2["negative_add_time_ids"], sample2["add_time_ids"]]
-                                    ).repeat(cfg.training.train_batch_size_per_gpu * cfg.training.num_views, 1)
-                                    down_intrablock_additional_residuals = [
-                                        sample2[f"adapter_state_{i}"].repeat(
-                                            2 * cfg.training.train_batch_size_per_gpu, 1, 1, 1
-                                        ) for i in range(4)
-                                    ]
                                 else:
                                     latents = sample2["states"][:, j]
                                     timesteps = sample2["timesteps"][:, j]
-                                    prompt_embeds = sample2["prompt_embeds"]
-                                    add_text_embeds = sample2["add_text_embeds"]
-                                    add_time_ids = sample2["add_time_ids"].repeat(
-                                        cfg.training.train_batch_size_per_gpu * cfg.training.num_views, 1
-                                    )
-                                    down_intrablock_additional_residuals = [
-                                        sample2[f"adapter_state_{i}"].repeat(
-                                            cfg.training.train_batch_size_per_gpu, 1, 1, 1
-                                        ) for i in range(4)
-                                    ]
+
                                 noise_pred2 = unet(
                                     latents,
                                     timesteps,
-                                    prompt_embeds,
+                                    prompt_embeds2,
                                     timestep_cond=timestep_cond,
                                     cross_attention_kwargs={
                                         "mv_scale": 1.0,
                                         **(pipeline.cross_attention_kwargs or {}),
                                     },
-                                    down_intrablock_additional_residuals=down_intrablock_additional_residuals,
-                                    added_cond_kwargs={
-                                        "text_embeds": add_text_embeds,
-                                        "time_ids": add_time_ids,
-                                    }
+                                    down_intrablock_additional_residuals=[
+                                        sample2[f"adapter_state_{i}"].clone()
+                                        for i in range(4)
+                                    ],
+                                    added_cond_kwargs=added_cond_kwargs2,
                                 ).sample
+
                                 if pipeline.do_classifier_free_guidance:
                                     noise_pred_uncond, noise_pred_text = noise_pred2.chunk(2)
                                     noise_pred2 = noise_pred_uncond + pipeline.guidance_scale * (
                                         noise_pred_text - noise_pred_uncond
                                     )
+
                                 log_probs = []
                                 for k in range(cfg.training.train_batch_size_per_gpu * cfg.training.num_views):
                                     log_prob = pipeline.scheduler.step(
@@ -563,7 +530,7 @@ def mvczigal_trainer(accelerator, cfg, pipeline, unet, reward_fn, mv_reward_fn, 
                 torch.cuda.empty_cache()
 
             del samples1, samples2
-            del latents, timesteps, prompt_embeds, add_text_embeds, add_time_ids, down_intrablock_additional_residuals
+            del latents, timesteps, prompt_embeds1, prompt_embeds2, added_cond_kwargs1, added_cond_kwargs2
             del noise_pred1, noise_pred2, log_probs, log_prob1, log_prob2, log_prob1_clipped, log_prob2_clipped
             del log_ratio1, log_ratio2, log_diff, log_diff_clipped, loss_unclipped, loss_clipped, loss
             if pipeline.do_classifier_free_guidance:
