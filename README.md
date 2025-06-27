@@ -50,7 +50,7 @@ Checkpoints will be automatically saved to the `logs/` directory, and training l
 
 ## ❄️ Inference
 
-Once training is complete—or if you prefer to **use our trained checkpoint (available for download on [Google Drive](https://drive.google.com/file/d/1KTNNFPBrOAvwbz_5w0ufFMoooigmt3vL/view?usp=drive_link))**—you can generate multiview images from text prompts with:
+Once training is complete—or if you prefer to **use our trained LoRA checkpoint (available for download on [Google Drive](https://drive.google.com/file/d/1KTNNFPBrOAvwbz_5w0ufFMoooigmt3vL/view?usp=drive_link))**—you can generate multiview images from text prompts with:
 
 ```
 python scripts/inference.py \

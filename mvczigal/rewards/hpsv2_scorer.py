@@ -39,6 +39,7 @@ class HPSv2Scorer(torch.nn.Module):
         checkpoint = torch.load(checkpoint_path, map_location=self.device)
         self.model.load_state_dict(checkpoint['state_dict'])
         self.model = self.model.to(self.device, dtype=self.dtype)
+        self.model.eval()
 
     @torch.no_grad()
     def image_preprocess(self, images):

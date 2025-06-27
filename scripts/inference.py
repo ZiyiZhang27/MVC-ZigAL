@@ -185,7 +185,7 @@ if __name__ == "__main__":
     parser.add_argument("--device", type=str, default="cuda")
     # Inference
     parser.add_argument("--text", type=str, required=True)
-    parser.add_argument("--num_inference_steps", type=int, default=50)
+    parser.add_argument("--num_inference_steps", type=int, default=8)
     parser.add_argument("--guidance_scale", type=float, default=7.0)
     parser.add_argument("--seed", type=int, default=-1)
     parser.add_argument(

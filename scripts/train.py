@@ -54,24 +54,35 @@ def main(cfg: DictConfig) -> None:
     # set seed (device_specific is very important to get different prompts on different devices)
     set_seed(cfg.training.seed, device_specific=True)
 
-    inference_dtype = torch.float16
+    # For mixed precision training we cast all non-trainable weights (vae, text_encoder and non-lora unet) to
+    # half-precision as these weights are only used for inference, keeping weights in full precision is not required.
+    inference_dtype = torch.float32
+    if accelerator.mixed_precision == "fp16":
+        inference_dtype = torch.float16
+    elif accelerator.mixed_precision == "bf16":
+        inference_dtype = torch.bfloat16
 
     # load pipeline
-    vae = AutoencoderKL.from_pretrained(cfg.pretrained.vae_model, torch_dtype=inference_dtype)
-    if cfg.pretrained.unet_model and not os.path.exists(cfg.pretrained.unet_model):
-        unet = UNet2DConditionModel.from_pretrained(cfg.pretrained.unet_model, torch_dtype=inference_dtype)
-    else:
-        unet = UNet2DConditionModel.from_pretrained(
-            cfg.pretrained.base_model, subfolder="unet", torch_dtype=inference_dtype
-        )
+    vae = AutoencoderKL.from_pretrained(
+        cfg.pretrained.vae_model if cfg.pretrained.vae_model else cfg.pretrained.base_model,
+        subfolder=None if cfg.pretrained.vae_model else "vae",
+    )
+    unet = UNet2DConditionModel.from_pretrained(
+        cfg.pretrained.unet_model if cfg.pretrained.unet_model and not os.path.exists(cfg.pretrained.unet_model)
+        else cfg.pretrained.base_model,
+        subfolder=None if cfg.pretrained.unet_model and not os.path.exists(cfg.pretrained.unet_model) else "unet",
+        torch_dtype=inference_dtype,
+    )
+    if cfg.pretrained.unet_model and os.path.exists(cfg.pretrained.unet_model):
+        unet.load_state_dict(load_file(cfg.pretrained.unet_model))
     pipeline = MVAdapterT2MVSDXLPipeline.from_pretrained(
         cfg.pretrained.base_model,
         torch_dtype=inference_dtype,
         vae=vae,
         unet=unet,
     )
-    if cfg.pretrained.unet_model and os.path.exists(cfg.pretrained.unet_model):
-        unet.load_state_dict(load_file(cfg.pretrained.unet_model))
+    pipeline.vae = vae
+    pipeline.unet = unet
 
     if cfg.training.scheduler == "lcm":
         scheduler_class = LCMScheduler
@@ -125,7 +136,10 @@ def main(cfg: DictConfig) -> None:
     )
 
     # move unet, vae, text_encoder and cond_encoder to device and cast to inference_dtype
-    pipeline.vae.to(accelerator.device, dtype=inference_dtype)
+    if cfg.pretrained.vae_model:
+        pipeline.vae.to(accelerator.device, dtype=inference_dtype)
+    else:
+        pipeline.vae.to(accelerator.device, dtype=torch.float32)
     pipeline.text_encoder.to(accelerator.device, dtype=inference_dtype)
     pipeline.text_encoder_2.to(accelerator.device, dtype=inference_dtype)
     unet.to(accelerator.device, dtype=inference_dtype)
@@ -147,9 +161,9 @@ def main(cfg: DictConfig) -> None:
             target_modules=["to_k", "to_q", "to_v", "to_out.0", "to_k_mv", "to_q_mv", "to_v_mv", "to_out_mv.0"],
         )
         unet.add_adapter(unet_lora_config)
-
-    # only upcast trainable parameters into fp32
-    cast_training_params(unet, dtype=torch.float32)
+        if accelerator.mixed_precision == "fp16":
+            # only upcast trainable parameters (LoRA layers) into fp32
+            cast_training_params(unet, dtype=torch.float32)
 
     # enable TF32 for faster training on Ampere GPUs
     torch.backends.cuda.matmul.allow_tf32 = True

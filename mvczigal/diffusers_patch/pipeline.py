@@ -202,11 +202,11 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
                 "Mixture of Denoisers" multi-pipeline setup, as elaborated in [**Refining the Image
                 Output**](https://huggingface.co/docs/diffusers/api/pipelines/stable_diffusion/stable_diffusion_xl#refining-the-image-output)
             guidance_scale (`float`, *optional*, defaults to 5.0):
-                Guidance scale as defined in [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598).
-                `guidance_scale` is defined as `w` of equation 2. of [Imagen
-                Paper](https://arxiv.org/pdf/2205.11487.pdf). Guidance scale is enabled by setting `guidance_scale >
-                1`. Higher guidance scale encourages to generate images that are closely linked to the text `prompt`,
-                usually at the expense of lower image quality.
+                Guidance scale as defined in [Classifier-Free Diffusion
+                Guidance](https://huggingface.co/papers/2207.12598). `guidance_scale` is defined as `w` of equation 2.
+                of [Imagen Paper](https://huggingface.co/papers/2205.11487). Guidance scale is enabled by setting
+                `guidance_scale > 1`. Higher guidance scale encourages to generate images that are closely linked to
+                the text `prompt`, usually at the expense of lower image quality.
             negative_prompt (`str` or `List[str]`, *optional*):
                 The prompt or prompts not to guide the image generation. If not defined, one has to pass
                 `negative_prompt_embeds` instead. Ignored when not using guidance (i.e., ignored if `guidance_scale` is
@@ -217,8 +217,8 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
             num_images_per_prompt (`int`, *optional*, defaults to 1):
                 The number of images to generate per prompt.
             eta (`float`, *optional*, defaults to 0.0):
-                Corresponds to parameter eta (η) in the DDIM paper: https://arxiv.org/abs/2010.02502. Only applies to
-                [`schedulers.DDIMScheduler`], will be ignored for others.
+                Corresponds to parameter eta (η) in the DDIM paper: https://huggingface.co/papers/2010.02502. Only
+                applies to [`schedulers.DDIMScheduler`], will be ignored for others.
             generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
                 One or a list of [torch generator(s)](https://pytorch.org/docs/stable/generated/torch.Generator.html)
                 to make generation deterministic.
@@ -258,9 +258,10 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
                 [diffusers.models.attention_processor](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/attention_processor.py).
             guidance_rescale (`float`, *optional*, defaults to 0.0):
                 Guidance rescale factor proposed by [Common Diffusion Noise Schedules and Sample Steps are
-                Flawed](https://arxiv.org/pdf/2305.08891.pdf) `guidance_scale` is defined as `φ` in equation 16. of
-                [Common Diffusion Noise Schedules and Sample Steps are Flawed](https://arxiv.org/pdf/2305.08891.pdf).
-                Guidance rescale factor should fix overexposure when using zero terminal SNR.
+                Flawed](https://huggingface.co/papers/2305.08891) `guidance_scale` is defined as `φ` in equation 16. of
+                [Common Diffusion Noise Schedules and Sample Steps are
+                Flawed](https://huggingface.co/papers/2305.08891). Guidance rescale factor should fix overexposure when
+                using zero terminal SNR.
             original_size (`Tuple[int]`, *optional*, defaults to (1024, 1024)):
                 If `original_size` is not the same as `target_size` the image will appear to be down- or upsampled.
                 `original_size` defaults to `(height, width)` if not specified. Part of SDXL's micro-conditioning as
@@ -538,8 +539,10 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
 
                 # expand the latents if we are doing classifier free guidance
                 latent_model_input = torch.cat([latents] * 2) if self.do_classifier_free_guidance else latents
+
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
+                # predict the noise residual
                 added_cond_kwargs = {"text_embeds": add_text_embeds, "time_ids": add_time_ids}
                 if ip_adapter_image is not None or ip_adapter_image_embeds is not None:
                     added_cond_kwargs["image_embeds"] = image_embeds
@@ -592,7 +595,7 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
                     noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
 
                 if self.do_classifier_free_guidance and self.guidance_rescale > 0.0:
-                    # Based on 3.4. in https://arxiv.org/pdf/2305.08891.pdf
+                    # Based on 3.4. in https://huggingface.co/papers/2305.08891
                     noise_pred = rescale_noise_cfg(noise_pred, noise_pred_text, guidance_rescale=self.guidance_rescale)
 
                 # compute the previous noisy sample x_t -> x_t-1
@@ -616,13 +619,8 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
 
                     latents = callback_outputs.pop("latents", latents)
                     prompt_embeds = callback_outputs.pop("prompt_embeds", prompt_embeds)
-                    negative_prompt_embeds = callback_outputs.pop("negative_prompt_embeds", negative_prompt_embeds)
                     add_text_embeds = callback_outputs.pop("add_text_embeds", add_text_embeds)
-                    negative_pooled_prompt_embeds = callback_outputs.pop(
-                        "negative_pooled_prompt_embeds", negative_pooled_prompt_embeds
-                    )
                     add_time_ids = callback_outputs.pop("add_time_ids", add_time_ids)
-                    negative_add_time_ids = callback_outputs.pop("negative_add_time_ids", negative_add_time_ids)
 
                 # call the callback, if provided
                 if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
@@ -636,13 +634,10 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
         if not output_type == "latent":
             # make sure the VAE is in float32 mode, as it overflows in float16
             needs_upcasting = self.vae.dtype == torch.float16 and self.vae.config.force_upcast
-            needs_downcasting = self.vae.dtype == torch.float16 and not self.vae.config.force_upcast
 
             if needs_upcasting:
                 self.upcast_vae()
                 latents = latents.to(next(iter(self.vae.post_quant_conv.parameters())).dtype)
-            elif needs_downcasting:
-                latents = latents.to(self.vae.dtype)
             elif latents.dtype != self.vae.dtype:
                 if torch.backends.mps.is_available():
                     # some platforms (eg. apple mps) misbehave due to a pytorch bug: https://github.com/pytorch/pytorch/pull/99272
@@ -663,7 +658,7 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
             else:
                 latents = latents / self.vae.config.scaling_factor
 
-            image = self.vae.decode(latents, return_dict=False)[0]
+            image = self.vae.decode(latents.to(self.vae.dtype), return_dict=False)[0]
 
             # cast back to fp16 if needed
             if needs_upcasting:
@@ -682,7 +677,7 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
         self.maybe_free_model_hooks()
 
         if not return_dict:
-            return image
+            return (image,)
 
         states = torch.stack(states, dim=1)  # (batch_size * num_views, num_inference_steps + 1, 4, height, width)
         log_probs = torch.stack(log_probs, dim=1)  # (batch_size * num_views, num_inference_steps, 1)
@@ -817,11 +812,11 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
                 "Mixture of Denoisers" multi-pipeline setup, as elaborated in [**Refining the Image
                 Output**](https://huggingface.co/docs/diffusers/api/pipelines/stable_diffusion/stable_diffusion_xl#refining-the-image-output)
             guidance_scale (`float`, *optional*, defaults to 5.0):
-                Guidance scale as defined in [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598).
-                `guidance_scale` is defined as `w` of equation 2. of [Imagen
-                Paper](https://arxiv.org/pdf/2205.11487.pdf). Guidance scale is enabled by setting `guidance_scale >
-                1`. Higher guidance scale encourages to generate images that are closely linked to the text `prompt`,
-                usually at the expense of lower image quality.
+                Guidance scale as defined in [Classifier-Free Diffusion
+                Guidance](https://huggingface.co/papers/2207.12598). `guidance_scale` is defined as `w` of equation 2.
+                of [Imagen Paper](https://huggingface.co/papers/2205.11487). Guidance scale is enabled by setting
+                `guidance_scale > 1`. Higher guidance scale encourages to generate images that are closely linked to
+                the text `prompt`, usually at the expense of lower image quality.
             negative_prompt (`str` or `List[str]`, *optional*):
                 The prompt or prompts not to guide the image generation. If not defined, one has to pass
                 `negative_prompt_embeds` instead. Ignored when not using guidance (i.e., ignored if `guidance_scale` is
@@ -832,8 +827,8 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
             num_images_per_prompt (`int`, *optional*, defaults to 1):
                 The number of images to generate per prompt.
             eta (`float`, *optional*, defaults to 0.0):
-                Corresponds to parameter eta (η) in the DDIM paper: https://arxiv.org/abs/2010.02502. Only applies to
-                [`schedulers.DDIMScheduler`], will be ignored for others.
+                Corresponds to parameter eta (η) in the DDIM paper: https://huggingface.co/papers/2010.02502. Only
+                applies to [`schedulers.DDIMScheduler`], will be ignored for others.
             generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
                 One or a list of [torch generator(s)](https://pytorch.org/docs/stable/generated/torch.Generator.html)
                 to make generation deterministic.
@@ -873,9 +868,10 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
                 [diffusers.models.attention_processor](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/attention_processor.py).
             guidance_rescale (`float`, *optional*, defaults to 0.0):
                 Guidance rescale factor proposed by [Common Diffusion Noise Schedules and Sample Steps are
-                Flawed](https://arxiv.org/pdf/2305.08891.pdf) `guidance_scale` is defined as `φ` in equation 16. of
-                [Common Diffusion Noise Schedules and Sample Steps are Flawed](https://arxiv.org/pdf/2305.08891.pdf).
-                Guidance rescale factor should fix overexposure when using zero terminal SNR.
+                Flawed](https://huggingface.co/papers/2305.08891) `guidance_scale` is defined as `φ` in equation 16. of
+                [Common Diffusion Noise Schedules and Sample Steps are
+                Flawed](https://huggingface.co/papers/2305.08891). Guidance rescale factor should fix overexposure when
+                using zero terminal SNR.
             original_size (`Tuple[int]`, *optional*, defaults to (1024, 1024)):
                 If `original_size` is not the same as `target_size` the image will appear to be down- or upsampled.
                 `original_size` defaults to `(height, width)` if not specified. Part of SDXL's micro-conditioning as
@@ -1160,8 +1156,10 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
 
                 # expand the latents if we are doing classifier free guidance
                 latent_model_input = torch.cat([latents] * 2) if self.do_classifier_free_guidance else latents
+
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
+                # predict the noise residual
                 added_cond_kwargs = {"text_embeds": add_text_embeds, "time_ids": add_time_ids}
                 if ip_adapter_image is not None or ip_adapter_image_embeds is not None:
                     added_cond_kwargs["image_embeds"] = image_embeds
@@ -1214,14 +1212,19 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
                     noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
 
                 if self.do_classifier_free_guidance and self.guidance_rescale > 0.0:
-                    # Based on 3.4. in https://arxiv.org/pdf/2305.08891.pdf
+                    # Based on 3.4. in https://huggingface.co/papers/2305.08891
                     noise_pred = rescale_noise_cfg(noise_pred, noise_pred_text, guidance_rescale=self.guidance_rescale)
 
                 # compute the previous noisy sample x_t -> x_t-1
                 self.scheduler._step_index = None
+                latents_dtype = latents.dtype
                 next_latents, denoised, log_prob = self.scheduler.step(
                     noise_pred, t, latents, **extra_step_kwargs, return_dict=False
                 )
+                if next_latents.dtype != latents_dtype:
+                    if torch.backends.mps.is_available():
+                        # some platforms (eg. apple mps) misbehave due to a pytorch bug: https://github.com/pytorch/pytorch/pull/99272
+                        next_latents = next_latents.to(latents_dtype)
 
                 if i < lambda_step:  # when cur_step \in {T, \lambda}, then do this optimization
                     for step in range(T_max):  # the default T_max = 1, just once optimization iteration
@@ -1230,6 +1233,7 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
 
                         # expand the latents if we are doing classifier free guidance
                         latent_model_input = torch.cat([next_latents] * 2) if self.do_classifier_free_guidance else next_latents
+
                         latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                         if i < int(num_inference_steps * control_conditioning_factor):
@@ -1280,18 +1284,24 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
                             noise_pred = noise_pred_uncond + inv_guidance_scale * (noise_pred_text - noise_pred_uncond)
 
                         if self.do_classifier_free_guidance and self.guidance_rescale > 0.0:
-                            # Based on 3.4. in https://arxiv.org/pdf/2305.08891.pdf
+                            # Based on 3.4. in https://huggingface.co/papers/2305.08891
                             noise_pred = rescale_noise_cfg(noise_pred, noise_pred_text, guidance_rescale=self.guidance_rescale)
 
                         # compute the previous noisy sample x_t -> x_t-1
                         self.inv_scheduler._step_index = None
+                        latents_dtype = next_latents.dtype
                         latents = self.inv_scheduler.step(noise_pred, t, next_latents, return_dict=False)[0]
+                        if latents.dtype != latents_dtype:
+                            if torch.backends.mps.is_available():
+                                # some platforms (eg. apple mps) misbehave due to a pytorch bug: https://github.com/pytorch/pytorch/pull/99272
+                                latents = latents.to(latents_dtype)
 
                         ########################## zig operation ##########################
                         latents = latents.to(prompt_embeds.dtype)
 
                         # expand the latents if we are doing classifier free guidance
                         latent_model_input = torch.cat([latents] * 2) if self.do_classifier_free_guidance else latents
+
                         latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                         if i < int(num_inference_steps * control_conditioning_factor):
@@ -1342,14 +1352,19 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
                             noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
 
                         if self.do_classifier_free_guidance and self.guidance_rescale > 0.0:
-                            # Based on 3.4. in https://arxiv.org/pdf/2305.08891.pdf
+                            # Based on 3.4. in https://huggingface.co/papers/2305.08891
                             noise_pred = rescale_noise_cfg(noise_pred, noise_pred_text, guidance_rescale=self.guidance_rescale)
 
                         # compute the previous noisy sample x_t -> x_t-1
                         self.scheduler._step_index = None
+                        latents_dtype = latents.dtype
                         next_latents, denoised, log_prob = self.scheduler.step(
                             noise_pred, t, latents, **extra_step_kwargs, return_dict=False
                         )
+                        if next_latents.dtype != latents_dtype:
+                            if torch.backends.mps.is_available():
+                                # some platforms (eg. apple mps) misbehave due to a pytorch bug: https://github.com/pytorch/pytorch/pull/99272
+                                next_latents = next_latents.to(latents_dtype)
 
                 states.append(latents)
                 next_states.append(next_latents)
@@ -1365,13 +1380,8 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
 
                     latents = callback_outputs.pop("latents", latents)
                     prompt_embeds = callback_outputs.pop("prompt_embeds", prompt_embeds)
-                    negative_prompt_embeds = callback_outputs.pop("negative_prompt_embeds", negative_prompt_embeds)
                     add_text_embeds = callback_outputs.pop("add_text_embeds", add_text_embeds)
-                    negative_pooled_prompt_embeds = callback_outputs.pop(
-                        "negative_pooled_prompt_embeds", negative_pooled_prompt_embeds
-                    )
                     add_time_ids = callback_outputs.pop("add_time_ids", add_time_ids)
-                    negative_add_time_ids = callback_outputs.pop("negative_add_time_ids", negative_add_time_ids)
 
                 # call the callback, if provided
                 if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
@@ -1385,13 +1395,10 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
         if not output_type == "latent":
             # make sure the VAE is in float32 mode, as it overflows in float16
             needs_upcasting = self.vae.dtype == torch.float16 and self.vae.config.force_upcast
-            needs_downcasting = self.vae.dtype == torch.float16 and not self.vae.config.force_upcast
 
             if needs_upcasting:
                 self.upcast_vae()
                 latents = latents.to(next(iter(self.vae.post_quant_conv.parameters())).dtype)
-            elif needs_downcasting:
-                latents = latents.to(self.vae.dtype)
             elif latents.dtype != self.vae.dtype:
                 if torch.backends.mps.is_available():
                     # some platforms (eg. apple mps) misbehave due to a pytorch bug: https://github.com/pytorch/pytorch/pull/99272
@@ -1412,7 +1419,7 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
             else:
                 latents = latents / self.vae.config.scaling_factor
 
-            image = self.vae.decode(latents, return_dict=False)[0]
+            image = self.vae.decode(latents.to(self.vae.dtype), return_dict=False)[0]
 
             # cast back to fp16 if needed
             if needs_upcasting:
@@ -1431,7 +1438,7 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
         self.maybe_free_model_hooks()
 
         if not return_dict:
-            return image
+            return (image,)
 
         states = torch.stack(states, dim=1)  # (batch_size * num_views, num_inference_steps, 4, height, width)
         next_states = torch.stack(next_states, dim=1)  # (batch_size * num_views, num_inference_steps, 4, height, width)
