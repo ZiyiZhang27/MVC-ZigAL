@@ -46,7 +46,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 accelerate launch scripts/train.py
 
 Checkpoints will be automatically saved to the `logs/` directory, and training logs will be available on your Weights & Biases dashboard (configured during your first run).
 
-💡 **NOTE:** Training hyperparameters are pre‑configured in `mvczigal/config/mvczigal.yaml` for a 4‑GPU setup (NVIDIA GeForce RTX 4090, 24 GB each). If you have additional GPU memory available, increase `sample_batch_size_per_gpu` and `train_batch_size_per_gpu` while proportionally reducing `gradient_accumulation_steps`; you can also disable gradient checkpointing (`gradient_checkpointing: false`) if desired.
+💡 **NOTE:** Training hyperparameters are pre‑configured in `mvczigal/configs/` for a 4‑GPU setup (with 24 GB memory each). If you have additional GPU memory available, increase `sample_batch_size_per_gpu` and `train_batch_size_per_gpu` while proportionally reducing `gradient_accumulation_steps`; you can also disable gradient checkpointing (`gradient_checkpointing: false`) if desired.
 
 ## ❄️ Inference
 

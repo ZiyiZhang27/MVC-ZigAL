@@ -24,7 +24,7 @@ logger = get_logger(__name__)
 
 
 @hydra.main(
-    version_base=None, config_path="../mvczigal/config", config_name="lcm_sdxl_mate3d"
+    version_base=None, config_path="../mvczigal/configs", config_name="lcm_sdxl_mate3d"
 )
 def main(cfg: DictConfig) -> None:
     unique_id = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
