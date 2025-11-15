@@ -20,9 +20,11 @@ from mvczigal.data import prompts
 
 logger = get_logger(__name__)
 
+# os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+
 
 @hydra.main(
-    version_base=None, config_path="../mvczigal/config", config_name="mvczigal"
+    version_base=None, config_path="../mvczigal/config", config_name="lcm_sdxl_mate3d"
 )
 def main(cfg: DictConfig) -> None:
     unique_id = datetime.datetime.now().strftime("%Y.%m.%d_%H.%M.%S")
@@ -52,6 +54,7 @@ def main(cfg: DictConfig) -> None:
         )
 
     # set seed (device_specific is very important to get different prompts on different devices)
+    # set_seed(cfg.training.seed, device_specific=True, deterministic=True)
     set_seed(cfg.training.seed, device_specific=True)
 
     # For mixed precision training we cast all non-trainable weights (vae, text_encoder and non-lora unet) to

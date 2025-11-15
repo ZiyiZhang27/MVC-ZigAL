@@ -770,6 +770,7 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
         # ZMV-Sampling
         T_max: int = 1,
         inv_guidance_scale: float = 1.0,
+        inv_control_conditioning_scale: Optional[float] = 1.0,
         lambda_step: int = 1,
         **kwargs,
     ):
@@ -1097,8 +1098,10 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
         control_image_feature = control_image_feature.repeat(batch_size, 1, 1, 1)
 
         adapter_state = self.cond_encoder(control_image_feature)
+        inv_adapter_state = []
         for i, state in enumerate(adapter_state):
             adapter_state[i] = state * control_conditioning_scale
+            inv_adapter_state.append(state * inv_control_conditioning_scale)
 
         # Preprocess controlnet image if provided
         do_controlnet = controlnet_image is not None and hasattr(self, "controlnet")
@@ -1237,7 +1240,7 @@ class MVAdapterT2MVSDXLPipeline(StableDiffusionXLPipeline, CustomAdapterMixin):
                         latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                         if i < int(num_inference_steps * control_conditioning_factor):
-                            down_intrablock_additional_residuals = [state.clone() for state in adapter_state]
+                            down_intrablock_additional_residuals = [state.clone() for state in inv_adapter_state]
                         else:
                             down_intrablock_additional_residuals = None
 
