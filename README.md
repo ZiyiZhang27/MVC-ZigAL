@@ -11,7 +11,7 @@ This repository contains a PyTorch implementation of **MVC-ZigAL**, as presented
 
 ## 🔥 News
 
-- **[2026.02]** Our paper has been accepted by **CVPR 2026** 🎉🎉🎉
+- **[2026.02]** Our paper has been accepted to **CVPR 2026** 🎉🎉🎉
 
 ## 📖 Introduction
 
