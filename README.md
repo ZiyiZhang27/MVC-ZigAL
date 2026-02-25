@@ -79,11 +79,11 @@ python scripts/inference.py \
 If you find this work useful in your research, please consider citing our paper:
 
 ```bibtex
-@article{zhang2025refining,
+@inproceedings{zhang2026refining,
   title={Refining Few-Step Text-to-Multiview Diffusion via Reinforcement Learning},
-  author={Ziyi Zhang and Li Shen and Deheng Ye and Yong Luo and Huangxuan Zhao and Lefei Zhang},
-  journal={arXiv preprint arXiv:2505.20107},
-  year={2025}
+  author={Ziyi Zhang and Li Shen and Deheng Ye and Yong Luo and Huangxuan Zhao and Meng Liu and Wei Yu and Lefei Zhang},
+  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition},
+  year={2026}
 }
 ```
 
